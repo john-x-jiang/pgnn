@@ -40,3 +40,4 @@ class Params():
 def inline_print(s):
     sys.stdout.write(s + '\r')
     sys.stdout.flush()
+

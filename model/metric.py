@@ -11,9 +11,10 @@ def mse(output, target):
 
 def tcc(u, x):
     m, n, w = u.shape
-    correlation_sum = 0
-    count = 0
+    res = []
     for i in range(m):
+        correlation_sum = 0
+        count = 0
         for j in range(n):
             a = u[i, j, :]
             b = x[i, j, :]
@@ -21,14 +22,18 @@ def tcc(u, x):
                 count += 1
                 continue
             correlation_sum = correlation_sum + stats.pearsonr(a, b)[0]
-    return (correlation_sum / (m * n - count))
+        correlation_sum = correlation_sum / (n - count)
+        res.append(correlation_sum)
+    res = np.array(res)
+    return res
 
 
 def scc(u, x):
     m, n, w = u.shape
-    correlation_sum = 0
-    count = 0
+    res = []
     for i in range(m):
+        correlation_sum = 0
+        count = 0
         for j in range(w):
             a = u[i, :, j]
             b = x[i, :, j]
@@ -36,4 +41,7 @@ def scc(u, x):
                 count += 1
                 continue
             correlation_sum = correlation_sum + stats.pearsonr(a, b)[0]
-    return (correlation_sum / (m * w - count))
+        correlation_sum = correlation_sum / (w - count)
+        res.append(correlation_sum)
+    res = np.array(res)
+    return res

@@ -1,0 +1,86 @@
+{
+    "exp_name": "demo",
+    "exp_id": "01",
+    
+    "model": {
+        "type": "DKF",
+        "args": {
+            "num_channel": [
+                1,
+                8,
+                16,
+                32,
+                64,
+                128,
+                256
+            ],
+            "latent_feature": 64,
+            "rnn_type": "lstm",
+            "orthogonal_init": true,
+            "rnn_bidirection": true,
+            "reverse_input": true,
+            "rnn_dim": 256,
+            "train_init": false,
+            "z_dim": 64,
+            "transition_dim": 128,
+            "sample": true
+        }
+    },
+
+    "data":{
+        "data_set": "HeartDataLoader",
+        "data_dir": "data/",
+        "data_names": ["EC"],
+        "signal_type": "egm",
+        "num_meshes": [568],
+        "seq_len": 101,
+        "graph_method": "bipartite",
+        "num_workers": 1
+    },
+
+    "optimizer": {
+        "type": "Adam",
+        "args": {
+            "lr": 5e-4,
+            "amsgrad": false,
+            "betas": [0.9, 0.999]
+        }
+    },
+    "lr_scheduler": 0,
+
+    "loss": "dmm_loss",
+    "metrics": [
+        "mse", "tcc", "scc"
+    ],
+
+    "batch_size": 8,
+    "ecgi": 1,
+    "device": 0,
+    "training": {
+        "epochs": 500,
+        "overfit_single_batch": false,
+
+        "save_period": 10,
+
+        "monitor": "min val_loss",
+        "early_stop": 20,
+
+        "torso_len": 120,
+
+        "stochastic": true,
+        "kl_args":{
+            "min_annealing_factor": 0.0,
+            "anneal_update": 1000,
+            "elbo": "sum",
+            "lambda": 10
+        },
+        "emission": "q"
+    },
+    "evaluating": {
+        "torso_len": 120,
+        "stochastic": true,
+        "emission": "q"
+    },
+    
+    "best_model": "m_best"
+}

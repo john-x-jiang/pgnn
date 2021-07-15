@@ -17,11 +17,12 @@ def evaluate_driver(model, data_loaders, metrics, hparams, exp_dir, data_tag):
     eval_config = hparams.evaluating
     torso_len = eval_config['torso_len']
     emission = eval_config['emission']
+    stochastic = eval_config['stochastic']
     # reconstruction & prediction
-    evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len, emission=emission)
+    evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len, emission=emission, stochastic=stochastic)
 
 
-def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len=None, emission='q'):
+def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len=None, emission='q', stochastic=True):
     model.eval()
     n_steps = 0
     mses = {}
@@ -45,7 +46,13 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, tor
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
-                x_, _ = model(y, data_name)
+                physics_vars, statsic_vars = model(y, data_name)
+                if stochastic:
+                    x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                    mu_q, logvar_q, mu_p, logvar_p = statsic_vars
+                    x_ = x_q
+                else:
+                    x_ = physics_vars
 
                 if idx == 0:
                     q_recons[data_name] = tensor2np(x_)
@@ -65,16 +72,18 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, tor
                         else:
                             mses[data_name] = np.concatenate((mses[data_name], mse), axis=0)
                     if met.__name__ == 'tcc':
-                        x = tensor2np(x)
-                        x_ = tensor2np(x_)
+                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                            x = tensor2np(x)
+                            x_ = tensor2np(x_)
                         tcc = met(x_, x)
                         if idx == 0:
                             tccs[data_name] = tcc
                         else:
                             tccs[data_name] = np.concatenate((tccs[data_name], tcc), axis=0)
                     if met.__name__ == 'scc':
-                        x = tensor2np(x)
-                        x_ = tensor2np(x_)
+                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                            x = tensor2np(x)
+                            x_ = tensor2np(x_)
                         scc = met(x_, x)
                         if idx == 0:
                             sccs[data_name] = scc

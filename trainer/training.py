@@ -111,6 +111,7 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
     train_config = dict(hparams.training)
     kl_args = train_config['kl_args']
     torso_len = train_config['torso_len']
+    stochastic = train_config['stochastic']
     total_loss = 0
     n_steps = 0
     batch_size = hparams.batch_size
@@ -128,13 +129,13 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
 
             optimizer.zero_grad()
 
-            if kl_args['is_kl']:
-                kl_annealing_factor = determine_annealing_factor(train_config['min_annealing_factor'],
-                                                                train_config['anneal_update'],
+            if stochastic:
+                kl_annealing_factor = determine_annealing_factor(kl_args['min_annealing_factor'],
+                                                                kl_args['anneal_update'],
                                                                 epoch - 1, len_epoch, idx)
-                r_kl = train_config['lambda']
+                r_kl = kl_args['lambda']
                 kl_factor = kl_annealing_factor * r_kl
-                elbo_mode = train_config['elbo']
+                elbo_mode = kl_args['elbo']
 
             emission = train_config['emission']
             if emission == 'q':
@@ -146,8 +147,15 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             else:
                 raise NotImplementedError
             
-            x_, extra = model(y, data_name)
-            total = loss(x_, x)
+            physics_vars, statsic_vars = model(y, data_name)
+            if stochastic:
+                x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                mu_q, logvar_q, mu_p, logvar_p = statsic_vars
+
+                kl, nll_q, nll_p, total = loss(y, y_p, y_q, mu_q, logvar_q, mu_p, logvar_p, kl_factor, r1, r2)
+            else:
+                x_ = physics_vars
+                total = loss(x_, x)
             total.backward()
 
             total_loss += total.item()
@@ -167,6 +175,7 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
     train_config = dict(hparams.training)
     kl_args = train_config['kl_args']
     torso_len = train_config['torso_len']
+    stochastic = train_config['stochastic']
     total_loss = 0
     n_steps = 0
     batch_size = hparams.batch_size
@@ -183,10 +192,10 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
-                if kl_args['is_kl']:
-                    r_kl = train_config['lambda']
+                if stochastic:
+                    r_kl = kl_args['lambda']
                     kl_factor = 1 * r_kl
-                    elbo_mode = train_config['elbo']
+                    elbo_mode = kl_args['elbo']
 
                 emission = train_config['emission']
                 if emission == 'q':
@@ -198,8 +207,15 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 else:
                     raise NotImplementedError
                 
-                x_, extra = model(y, data_name)
-                total = loss(x_, x)
+                physics_vars, statsic_vars = model(y, data_name)
+                if stochastic:
+                    x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                    mu_q, logvar_q, mu_p, logvar_p = statsic_vars
+
+                    kl, nll_q, nll_p, total = loss(y, y_p, y_q, mu_q, logvar_q, mu_p, logvar_p, kl_factor, r1, r2)
+                else:
+                    x_ = physics_vars
+                    total = loss(x_, x)
 
                 total_loss += total.item()
                 n_steps += 1
