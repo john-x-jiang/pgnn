@@ -17,13 +17,14 @@
             "latent_feature": 64,
             "rnn_type": "lstm",
             "orthogonal_init": true,
-            "rnn_bidirection": true,
-            "reverse_input": true,
+            "rnn_bidirection": false,
+            "reverse_input": false,
             "rnn_dim": 256,
             "train_init": false,
             "z_dim": 64,
             "transition_dim": 128,
-            "sample": true
+            "sample": true,
+            "clip": true
         }
     },
 
@@ -67,19 +68,17 @@
 
         "torso_len": 120,
 
-        "stochastic": true,
         "kl_args":{
             "min_annealing_factor": 0.0,
             "anneal_update": 1000,
-            "elbo": "sum",
             "lambda": 10
         },
-        "emission": "q"
+        "r1": 1,
+        "r2": 0,
+        "smooth": 5e-3
     },
     "evaluating": {
-        "torso_len": 120,
-        "stochastic": true,
-        "emission": "q"
+        "torso_len": 120
     },
     
     "best_model": "m_best"
