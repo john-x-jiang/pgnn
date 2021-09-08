@@ -16,20 +16,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def evaluate_driver(model, data_loaders, metrics, hparams, exp_dir, data_tag):
     eval_config = hparams.evaluating
     torso_len = eval_config['torso_len']
-    emission = eval_config['emission']
-    stochastic = eval_config['stochastic']
-    # reconstruction & prediction
-    evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len, emission=emission, stochastic=stochastic)
+    loss_type = hparams.loss
+
+    evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len, loss_type=loss_type)
 
 
-def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len=None, emission='q', stochastic=True):
+def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len=None, loss_type=None):
     model.eval()
     n_steps = 0
     mses = {}
     tccs = {}
     sccs = {}
 
-    p_recons = {}
     q_recons = {}
     all_xs = {}
     all_labels = {}
@@ -46,13 +44,17 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, tor
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
-                physics_vars, statsic_vars = model(y, data_name)
-                if stochastic:
+                physics_vars, _ = model(y, data_name)
+                if loss_type == 'dmm_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                    mu_q, logvar_q, mu_p, logvar_p = statsic_vars
+                    x_ = x_q
+                elif loss_type == 'data_driven_loss':
+                    x_ = physics_vars
+                elif loss_type == 'physics_loss' or loss_type == 'stochastic_ddr_loss':
+                    x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                     x_ = x_q
                 else:
-                    x_ = physics_vars
+                    raise NotImplemented
 
                 if idx == 0:
                     q_recons[data_name] = tensor2np(x_)
@@ -91,16 +93,16 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, tor
                             sccs[data_name] = np.concatenate((sccs[data_name], scc), axis=0)
     for met in metrics:
         if met.__name__ == 'mse':
-            print_results(exp_dir, emission, 'mse', mses)
+            print_results(exp_dir, 'mse', mses)
         if met.__name__ == 'tcc':
-            print_results(exp_dir, emission, 'tcc', tccs)
+            print_results(exp_dir, 'tcc', tccs)
         if met.__name__ == 'scc':
-            print_results(exp_dir, emission, 'scc', sccs)
+            print_results(exp_dir, 'scc', sccs)
     
     save_result(exp_dir, q_recons, all_xs, all_labels, data_tag)
 
 
-def print_results(exp_dir, emission, met_name, mets):
+def print_results(exp_dir, met_name, mets):
     if not os.path.exists(exp_dir + '/data'):
         os.makedirs(exp_dir + '/data')
     

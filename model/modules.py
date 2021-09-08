@@ -238,6 +238,139 @@ class ST_Block(nn.Module):
         return x.permute(0, 3, 2, 1).contiguous()
 
 
+class Propagation(nn.Module):
+    def __init__(self,
+                 latent_dim,
+                 fxn_type='linear',
+                 num_layers=1,
+                 method='rk4',
+                 rtol=1e-5,
+                 atol=1e-7,
+                 adjoint=True,
+                 stochastic=False):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.fxn_type = fxn_type
+        self.num_layers = num_layers
+        self.method = method
+        self.rtol = rtol
+        self.atol = atol
+        self.adjoint = adjoint
+        self.stochastic = stochastic
+
+        if fxn_type == 'linear':
+            self.ode_fxn = nn.ModuleList()
+            for i in range(num_layers):
+                self.ode_fxn.append(nn.Linear(latent_dim, latent_dim))
+        else:
+            raise NotImplemented
+        
+        self.act = nn.ELU(inplace=True)
+        self.act_last = nn.Tanh()
+
+        if stochastic:
+            self.lin_m = nn.Linear(latent_dim, latent_dim)
+            self.lin_v = nn.Linear(latent_dim, latent_dim)
+            # self.act_v = nn.Softplus()
+            self.lin_m.weight.data = torch.eye(latent_dim)
+            self.lin_m.bias.data = torch.zeros(latent_dim)
+            self.act_v = nn.Tanh()
+    
+    def init(self, trainable=True):
+        return nn.Parameter(torch.zeros(self.latent_dim), requires_grad=trainable).to(device), \
+            nn.Parameter(torch.zeros(self.latent_dim), requires_grad=trainable).to(device)
+    
+    def ode_solver(self, t, x):
+        z = x.contiguous()
+        for idx, layers in enumerate(self.ode_fxn):
+            if idx != self.num_layers - 1:
+                z = self.act(layers(z))
+            else:
+                z = self.act_last(layers(z))
+        return z
+    
+    def forward(self, x, dt, steps=1):
+        if steps == 1:
+            self.integration_time = dt * torch.Tensor([0, 1]).float().to(device)
+        else:
+            self.integration_time = dt * torch.arange(steps).to(device)
+
+        N, V, C = x.shape
+        x = x.contiguous()
+
+        solver = lambda t, x: self.ode_solver(t, x)
+        if self.adjoint:
+            x = torchdiffeq.odeint_adjoint(solver, x, self.integration_time,
+                                           rtol=self.rtol, atol=self.atol, method=self.method, adjoint_params=())
+        else:
+            x = torchdiffeq.odeint(solver, x, self.integration_time,
+                                   rtol=self.rtol, atol=self.atol, method=self.method)
+        
+        if steps == 1:
+            x = x[-1]
+        x = x.view(steps * N, V, C)
+        if self.stochastic:
+            mu = self.lin_m(x)
+            _var = self.lin_v(x)
+            # _var = torch.clamp(_var, min=-100, max=85)
+            var = self.act_v(_var)
+
+            mu = mu.view(steps, N, V, C)
+            var = var.view(steps, N, V, C)
+            if steps != 1:
+                mu = mu.permute(1, 3, 2, 0).contiguous()
+                var = var.permute(1, 3, 2, 0).contiguous()
+
+            return mu, var
+        else:
+            x = x.view(steps, N, V, C)
+            if steps != 1:
+                x = x.permute(1, 3, 2, 0).contiguous()
+            return x
+
+
+class Correction(nn.Module):
+    def __init__(self,
+                 latent_dim,
+                 rnn_type='gru',
+                 dim=3,
+                 kernel_size=3,
+                 is_open_spline=True,
+                 degree=1,
+                 norm=True,
+                 root_weight=True,
+                 bias=True,
+                 stochastic=False):
+        super().__init__()
+        self.latent_dim = latent_dim
+        self.rnn_type = rnn_type
+        self.stochastic = stochastic
+
+        if rnn_type == 'gru':
+            self.rnn = GCGRUCell(latent_dim, latent_dim, kernel_size, dim, is_open_spline, degree, norm, root_weight, bias)
+        else:
+            raise NotImplemented
+        
+        if stochastic:
+            self.lin_m = nn.Linear(latent_dim, latent_dim)
+            self.lin_v = nn.Linear(latent_dim, latent_dim)
+            # self.act_v = nn.Softplus()
+            self.lin_m.weight.data = torch.eye(latent_dim)
+            self.lin_m.bias.data = torch.zeros(latent_dim)
+            self.act_v = nn.Tanh()
+        
+    def forward(self, x, hidden, edge_index, edge_attr):
+        h = self.rnn(x, hidden, edge_index, edge_attr)
+        if self.stochastic:
+            mu = self.lin_m(h)
+            _var = self.lin_v(h)
+            # _var = torch.clamp(_var, min=-100, max=85)
+            var = self.act_v(_var)
+            return mu, var
+        else:
+            return h
+
+
 class GCGRUCell(nn.Module):
     def __init__(self,
                  input_dim,
@@ -396,8 +529,8 @@ class GCGRU(nn.Module):
             last_state_list.append(h)
         
         if not self.return_all_layers:
-            layer_output_list = layer_output_list[-1:]
-            last_state_list = last_state_list[-1:]
+            layer_output_list = layer_output_list[-1]
+            last_state_list = last_state_list[-1]
         
         return layer_output_list, last_state_list
     
@@ -591,8 +724,8 @@ class GCLSTM(nn.Module):
             last_state_list.append([h, c])
         
         if not self.return_all_layers:
-            layer_output_list = layer_output_list[-1:]
-            last_state_list = last_state_list[-1:]
+            layer_output_list = layer_output_list[-1]
+            last_state_list = last_state_list[-1]
         
         return layer_output_list, last_state_list
     
@@ -689,6 +822,7 @@ class RnnEncoder(nn.Module):
             hidden = hidden.view(B, V, -1, T)
         else:
             hidden, _ = self.rnn(x, edge_index=edge_index, edge_attr=edge_attr)
+            hidden = hidden[0]
         
         if self.reverse_input:
             hidden = reverse_sequence(hidden, seq_lengths)
@@ -696,10 +830,11 @@ class RnnEncoder(nn.Module):
 
 
 class Combiner(nn.Module):
-    def __init__(self, z_dim, rnn_dim):
+    def __init__(self, z_dim, rnn_dim, clip=True):
         super().__init__()
         self.z_dim = z_dim
         self.rnn_dim = rnn_dim
+        self.clip = clip
 
         self.lin1 = nn.Linear(z_dim, rnn_dim)
         self.act = nn.Tanh()
@@ -720,16 +855,21 @@ class Combiner(nn.Module):
         else:
             h_comb = 0.5 * (h_comb_ + h_rnn)
         mu = self.lin2(h_comb)
-        logvar = self.lin_v(h_comb)
-        return mu, logvar
+
+        _var = self.lin_v(h_comb)
+        if self.clip:
+            _var = torch.clamp(_var, min=-100, max=85)
+        var = self.act_var(_var)
+        return mu, var
 
 
 class Transition(nn.Module):
-    def __init__(self, z_dim, transition_dim, identity_init=True):
+    def __init__(self, z_dim, transition_dim, identity_init=True, clip=True):
         super().__init__()
         self.z_dim = z_dim
         self.transition_dim = transition_dim
         self.identity_init = identity_init
+        self.clip = clip
 
         # compute the gain (gate) of non-linearity
         self.lin1 = nn.Linear(z_dim, transition_dim)
@@ -762,8 +902,12 @@ class Transition(nn.Module):
         _h_t = self.act(self.lin3(z_t_1))
         h_t = self.act(self.lin4(_h_t))
         mu = (1 - g_t) * self.lin_n(z_t_1) + g_t * h_t
-        logvar = self.act_var(self.lin_v(h_t))
-        return mu, logvar
+
+        _var = self.lin_v(h_t)
+        if self.clip:
+            _var = torch.clamp(_var, min=-100, max=85)
+        var = self.act_var(_var)
+        return mu, var
 
 
 def expand(batch_size, num_nodes, T, edge_index, edge_attr, sample_rate=None):
