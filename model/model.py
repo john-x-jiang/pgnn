@@ -413,7 +413,7 @@ class BayesianFilter(BaseModel):
         z = self.time_modeling(embed, heart_name)
         x = self.decoder(z, heart_name)
         LX, y = self.physics(x, heart_name)
-        return (x, LX, y), (None, None, None, None)
+        return (x, LX, y, None, None, None), (None, None, None, None, None, None)
 
 
 class VariationalBF(BaseModel):

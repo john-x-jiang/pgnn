@@ -188,10 +188,10 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             if r2 is None:
                 r2 = 0
             
-            physics_vars, statsic_vars = model(y, data_name)
+            physics_vars, statistic_vars = model(y, data_name)
             if loss_type == 'dmm_loss':
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                mu_q, logvar_q, mu_p, logvar_p = statsic_vars
+                mu_q, logvar_q, mu_p, logvar_p = statistic_vars
 
                 kl, nll_q, nll_p, reg_q, reg_p, total = \
                     loss(y, y_p, y_q, mu_q, logvar_q, mu_p, logvar_p, LX_p, LX_q, kl_factor, r1, r2, smooth)
@@ -199,15 +199,16 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
                 x_ = physics_vars
                 total = loss(x_, x)
             elif loss_type == 'physics_loss':
+                import ipdb; ipdb.set_trace()
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statsic_vars
+                mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                 kl, nll_q, nll_p, reg_q, reg_p, total = \
                     loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
                 
             elif loss_type == 'stochastic_ddr_loss':
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statsic_vars
+                mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                 kl, nll_q, nll_p, reg_q, reg_p, total = \
                     loss(x, x_q, x_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2)
@@ -273,10 +274,10 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 if r2 is None:
                     r2 = 0
                 
-                physics_vars, statsic_vars = model(y, data_name)
+                physics_vars, statistic_vars = model(y, data_name)
                 if loss_type == 'dmm_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                    mu_q, logvar_q, mu_p, logvar_p = statsic_vars
+                    mu_q, logvar_q, mu_p, logvar_p = statistic_vars
 
                     kl, nll_q, nll_p, reg_q, reg_p, total = \
                         loss(y, y_p, y_q, mu_q, logvar_q, mu_p, logvar_p, LX_p, LX_q, kl_factor, r1, r2, smooth)
@@ -285,14 +286,14 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                     total = loss(x_, x)
                 elif loss_type == 'physics_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                    mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statsic_vars
+                    mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                     kl, nll_q, nll_p, reg_q, reg_p, total = \
                         loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
                     
                 elif loss_type == 'stochastic_ddr_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                    mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statsic_vars
+                    mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                     kl, nll_q, nll_p, reg_q, reg_p, total = \
                         loss(x, x_q, x_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2)
