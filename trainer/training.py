@@ -199,7 +199,6 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
                 x_ = physics_vars
                 total = loss(x_, x)
             elif loss_type == 'physics_loss':
-                import ipdb; ipdb.set_trace()
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                 mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 

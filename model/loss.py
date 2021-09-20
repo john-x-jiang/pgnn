@@ -51,7 +51,11 @@ def dmm_loss(y, y_p, y_q, mu1, var1, mu2, var2, LX_p, LX_q, kl_annealing_factor=
 def stochastic_ddr_loss(x, x_q, x_p, LX_q, LX_p, mu_p_seq=None, var_p_seq=None, mu_q_seq=None, var_q_seq=None, kl_annealing_factor=1, r1=1, r2=0):
     B, T = x.shape[0], x.shape[-1]
     nll_raw_q = mse_loss(x_q, x[:, :, :T], 'none')
-    nll_raw_p = mse_loss(x_p, x[:, :, :T], 'none')
+
+    if x_p is not None:
+        nll_raw_p = mse_loss(x_p, x[:, :, :T], 'none')
+    else:
+        nll_raw_p = torch.zeros_like(nll_raw_q)
 
     nll_m_p = nll_raw_p.sum() / B
     nll_m_q = nll_raw_q.sum() / B
@@ -73,8 +77,13 @@ def physics_loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq=None, var_p_seq=None, mu_q_se
     B, T = y.shape[0], y.shape[-1]
     nll_raw_q = mse_loss(y_q, y[:, :, :T], 'none')
     reg_raw_q = mse_loss(LX_q, torch.zeros_like(LX_q), 'none')
-    nll_raw_p = mse_loss(y_p, y[:, :, :T], 'none')
-    reg_raw_p = mse_loss(LX_p, torch.zeros_like(LX_p), 'none')
+
+    if y_p is not None:
+        nll_raw_p = mse_loss(y_p, y[:, :, :T], 'none')
+        reg_raw_p = mse_loss(LX_p, torch.zeros_like(LX_p), 'none')
+    else:
+        nll_raw_p = torch.zeros_like(nll_raw_q)
+        reg_raw_p = torch.zeros_like(nll_raw_q)
 
     nll_m_q = nll_raw_q.sum() / B
     reg_m_q = reg_raw_q.sum() / B
