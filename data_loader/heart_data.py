@@ -6,7 +6,7 @@ import torch
 from torch.utils.data import Dataset
 
 from torch_geometric.data import Data
-from torch_geometric.data import InMemoryDataset
+# from torch_geometric.data import InMemoryDataset
 
 
 class HeartGraphDataset(Dataset):

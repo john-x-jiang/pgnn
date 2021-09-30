@@ -211,7 +211,8 @@ def make_graph(hparams):
     for data_name, num_mesh in zip(data_names, num_meshes):
         print(data_name)
         root_dir = os.path.join(data_dir, 'signal/{}'.format(data_name))
-        g = mesh2graph.GraphPyramid(data_name, data_name, num_mesh, seq_len, graph_method)
+        structure_name = data_name.split('_')[0]
+        g = mesh2graph.GraphPyramid(data_name, structure_name, num_mesh, seq_len, graph_method)
         g.make_graph()
 
 

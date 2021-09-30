@@ -30,6 +30,12 @@ def train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, \
     if checkpt is not None:
         train_loss, val_loss = checkpt['train_loss'], checkpt['val_loss']
 
+        kl_t, kl_e = checkpt['kl_t'], checkpt['kl_e']
+        nll_q_t, nll_q_e = checkpt['nll_q_t'], checkpt['nll_q_e']
+        nll_p_t, nll_p_e = checkpt['nll_p_t'], checkpt['nll_p_e']
+        reg_q_t, reg_q_e = checkpt['reg_q_t'], checkpt['reg_q_e']
+        reg_p_t, reg_p_e = checkpt['reg_p_t'], checkpt['reg_p_e']
+
         metric_err = checkpt[monitor_metric][-1]
         not_improved_count = checkpt['not_improved_count']
 

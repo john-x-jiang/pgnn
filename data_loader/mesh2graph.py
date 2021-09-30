@@ -37,7 +37,7 @@ class GraphPyramid():
         self.pre_transform = T.KNNGraph(k=K)
         self.transform = T.Cartesian(cat=False)
         self.filename = osp.join(self.path_in, heart)
-        self.heart_name = heart
+        self.heart_name = structure
         self.num_mesh = num_mesh
         self.seq_len = seq_len
 

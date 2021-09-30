@@ -2,7 +2,7 @@ import os
 import numpy as np
 
 from data_loader.heart_data import HeartGraphDataset
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 
 
 class HeartDataLoader(DataLoader):

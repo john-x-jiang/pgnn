@@ -12,7 +12,7 @@ from torch.autograd import Variable
 import torchdiffeq
 
 from torch_geometric.nn.inits import uniform
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from data_loader.heart_data import HeartEmptyGraphDataset
 from torch_spline_conv import spline_basis, spline_weighting
 
@@ -1043,7 +1043,8 @@ def load_graph(filename, ecgi=0, graph_method=None):
 
 def get_params(data_path, heart_name, batch_size, ecgi=0, graph_method=None):
     # Load physics parameters
-    physics_dir = os.path.join(data_path, 'physics/{}/'.format(heart_name))
+    physics_name = heart_name.split('_')[0]
+    physics_dir = os.path.join(data_path, 'physics/{}/'.format(physics_name))
     mat_files = scipy.io.loadmat(os.path.join(physics_dir, 'h_L.mat'), squeeze_me=True, struct_as_record=False)
     L = mat_files['h_L']
 
