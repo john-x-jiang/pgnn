@@ -16,12 +16,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def evaluate_driver(model, data_loaders, metrics, hparams, exp_dir, data_tag):
     eval_config = hparams.evaluating
     torso_len = eval_config['torso_len']
+    signal_scaler = eval_config.get('signal_scaler')
     loss_type = hparams.loss
 
-    evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len, loss_type=loss_type)
+    evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, signal_scaler, torso_len, loss_type=loss_type)
 
 
-def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, torso_len=None, loss_type=None):
+def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, signal_scaler=1, torso_len=None, loss_type=None):
     model.eval()
     n_steps = 0
     mses = {}
@@ -44,18 +45,25 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, tor
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
+                if signal_scaler is not None:
+                    y = y * signal_scaler
+                    x = x * signal_scaler
+
                 physics_vars, _ = model(y, data_name)
                 if loss_type == 'dmm_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                     x_ = x_q
                 elif loss_type == 'data_driven_loss':
                     x_ = physics_vars
+                elif loss_type == 'baseline_loss':
+                    x_, _ = physics_vars
                 elif loss_type == 'physics_loss' or loss_type == 'stochastic_ddr_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                     x_ = x_q
                 else:
                     raise NotImplemented
 
+                import ipdb; ipdb.set_trace()
                 if idx == 0:
                     q_recons[data_name] = tensor2np(x_)
                     all_xs[data_name] = tensor2np(x)

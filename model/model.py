@@ -19,6 +19,9 @@ class BaseModel(nn.Module):
         :return: Model output
         """
         raise NotImplementedError
+    
+    def setup(self, *inputs):
+        pass
 
     def __str__(self):
         """
@@ -27,6 +30,81 @@ class BaseModel(nn.Module):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         params = sum([np.prod(p.size()) for p in model_parameters])
         return super().__str__() + '\nTrainable parameters: {}'.format(params)
+
+
+class Euclidean(BaseModel):
+    def __init__(self, seq_len, in_dim, out_dim, mid_dim_i, mid_dim_o, latent_dim, v_latent, v_mid):
+        super().__init__()
+        self.seq_len = seq_len
+        self.in_dim = in_dim
+        self.out_dim = out_dim
+        self.latent_dim = latent_dim
+        self.mid_dim_i = mid_dim_i
+        self.mid_dim_o = mid_dim_o
+        self.v_mid = v_mid
+        self.v_latent = v_latent
+
+        # encoder
+        self.fc1 = nn.LSTM(in_dim, mid_dim_i)
+        self.fc21 = nn.LSTM(mid_dim_i, latent_dim)
+        self.fc22 = nn.LSTM(mid_dim_i, latent_dim)
+        self.lin1 =nn.Linear(latent_dim * seq_len, v_mid)
+        self.lin2 =nn.Linear(v_mid, v_latent)
+
+        # decoder
+        self.lin3 = nn.Linear(v_latent, v_mid)
+        self.lin4 = nn.Linear(v_mid, latent_dim * seq_len)
+        self.fc3 = nn.LSTM(latent_dim, mid_dim_o)
+        self.fc41 = nn.LSTM(mid_dim_o, out_dim)
+        self.fc42 = nn.LSTM(mid_dim_o, out_dim)
+
+        self.relu = nn.ReLU()
+        self.sigmoid = nn.Sigmoid()
+    
+    def encode(self, x, heart_name):
+        batch_size = x.shape[0]
+        x = x.view(batch_size, -1, self.seq_len)
+        x = x.permute(2, 0, 1).contiguous()
+        _, B, _ = x.shape
+        out, hidden = self.fc1(x)
+        h1 = self.relu(out)
+        out21, hidden21 = self.fc21(h1)
+        outMean = out21.permute(1, 2, 0).contiguous().view(B,-1)
+        outMean = self.relu(self.lin1(outMean))
+        outMean = self.relu(self.lin2(outMean))
+        out22, hidden22 = self.fc22(h1)
+        outVar = out22.permute(1, 2, 0).contiguous().view(B, -1)
+        outVar = self.relu(self.lin1(outVar))
+        outVar = self.relu(self.lin2(outVar))
+        return outMean, outVar
+    
+    def reparameterize(self, mu, logvar):
+        if self.training:
+            std = logvar.mul(0.5).exp_()
+            eps = Variable(std.data.new(std.size()).normal_())
+            return eps.mul(std).add_(mu)
+        else:
+            return mu
+    
+    def decode(self, z, heart_name):
+        B, _ = z.shape
+        z1 = self.relu(self.lin3(z))
+        z2 = self.relu(self.lin4(z1))
+        z = z2.view(B, self.latent_dim,-1).permute(2, 0, 1)
+
+        out3, hidden3 = self.fc3(z)
+        h3 = self.relu(out3)
+        out1,hidden1 = self.fc41(h3)
+        out2, hidden2 = self.fc42(h3)
+        out1 = out1.permute(1, 2, 0).contiguous()
+        out2 = out2.permute(1, 2, 0).contiguous()
+        return out1, out2
+    
+    def forward(self, x, heart_name):
+        mu, logvar = self.encode(x, heart_name)
+        z = self.reparameterize(mu, logvar)
+        mu_theta, logvar_theta = self.decode(z, heart_name)
+        return (mu_theta, logvar_theta), (mu, logvar)
 
 
 class ST_GCNN(BaseModel):
@@ -222,8 +300,8 @@ class BayesianFilter(BaseModel):
         self.conv2 = Spatial_Block(self.nf[2], self.nf[3], dim=3, kernel_size=(3, 1), process='e', norm=False)
         self.conv3 = Spatial_Block(self.nf[3], self.nf[4], dim=3, kernel_size=(3, 1), process='e', norm=False)
 
-        self.fce1 = nn.Conv2d(self.nf[4], self.nf[5], 1)
-        self.fce2 = nn.Conv2d(self.nf[5], latent_dim, 1)
+        self.fce1 = nn.Conv2d(self.nf[4], self.nf[6], 1)
+        self.fce2 = nn.Conv2d(self.nf[6], latent_dim, 1)
 
         self.trans = Spline(latent_dim, latent_dim, dim=3, kernel_size=3, norm=False, degree=2, root_weight=False, bias=False)
         
@@ -437,8 +515,8 @@ class VariationalBF(BaseModel):
         self.conv2 = Spatial_Block(self.nf[2], self.nf[3], dim=3, kernel_size=(3, 1), process='e', norm=False)
         self.conv3 = Spatial_Block(self.nf[3], self.nf[4], dim=3, kernel_size=(3, 1), process='e', norm=False)
 
-        self.fce1 = nn.Conv2d(self.nf[4], self.nf[5], 1)
-        self.fce2 = nn.Conv2d(self.nf[5], latent_dim, 1)
+        self.fce1 = nn.Conv2d(self.nf[4], self.nf[6], 1)
+        self.fce2 = nn.Conv2d(self.nf[6], latent_dim, 1)
 
         self.trans = Spline(latent_dim, latent_dim, dim=3, kernel_size=3, norm=False, degree=2, root_weight=False, bias=False)
         

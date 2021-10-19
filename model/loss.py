@@ -100,3 +100,23 @@ def physics_loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq=None, var_p_seq=None, mu_q_se
     loss = kl_m * kl_annealing_factor + r1 * (nll_m_q + smooth * reg_m_q) + r2 * (nll_m_p + smooth * reg_m_p)
 
     return kl_m, nll_m_q, nll_m_p, reg_m_q, reg_m_p, loss
+
+
+def baseline_loss(x, mu_theta, logvar_theta, mu, logvar, kl_annealing_factor):
+    B, T = x.shape[0], x.shape[-1]
+    diff_sq = (x - mu_theta).pow(2)
+    precis = torch.exp(-logvar_theta)
+
+    nll_m_q = 0.5 * torch.sum(logvar_theta + torch.mul(diff_sq, precis))
+    nll_m_p = torch.zeros_like(nll_m_q)
+
+    reg_m_q = torch.zeros_like(nll_m_q)
+    reg_m_p = torch.zeros_like(nll_m_q)
+
+    kl_m = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+
+    nll_m_q /= B
+    kl_m /= B
+    
+    loss = kl_m * kl_annealing_factor + nll_m_q
+    return kl_m, nll_m_q, nll_m_p, reg_m_q, reg_m_p, loss

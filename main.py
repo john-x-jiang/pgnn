@@ -72,7 +72,7 @@ def data_loading(hparams, training=True, data_tag='test'):
                 batch_size=batch_size,
                 data_dir=data_dir,
                 split=split_val,
-                shuffle=False,
+                shuffle=True,
                 num_workers=num_workers,
                 data_name=data_name,
                 signal_type=signal_type,

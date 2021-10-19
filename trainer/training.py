@@ -161,6 +161,7 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
     train_config = dict(hparams.training)
     kl_args = train_config['kl_args']
     torso_len = train_config['torso_len']
+    signal_scaler = train_config.get('signal_scaler')
     loss_type = hparams.loss
     total_loss = 0
     kl_loss, nll_p_loss, nll_q_loss, reg_p_loss, reg_q_loss = 0, 0, 0, 0, 0
@@ -177,6 +178,10 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             signal = signal.to(device)
             x = signal[:, :-torso_len]
             y = signal[:, -torso_len:]
+
+            if signal_scaler is not None:
+                y = y * signal_scaler
+                x = x * signal_scaler
 
             optimizer.zero_grad()
 
@@ -204,13 +209,18 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             elif loss_type == 'data_driven_loss':
                 x_ = physics_vars
                 total = loss(x_, x)
+            elif loss_type == 'baseline_loss':
+                mu_theta, logvar_theta = physics_vars
+                mu, logvar = statistic_vars
+
+                kl, nll_q, nll_p, reg_q, reg_p, total = \
+                    loss(x, mu_theta, logvar_theta, mu, logvar, kl_factor)
             elif loss_type == 'physics_loss':
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                 mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                 kl, nll_q, nll_p, reg_q, reg_p, total = \
                     loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
-                
             elif loss_type == 'stochastic_ddr_loss':
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                 mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
@@ -250,11 +260,11 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
     train_config = dict(hparams.training)
     kl_args = train_config['kl_args']
     torso_len = train_config['torso_len']
+    signal_scaler = train_config.get('signal_scaler')
     loss_type = hparams.loss
     total_loss = 0
     kl_loss, nll_p_loss, nll_q_loss, reg_p_loss, reg_q_loss = 0, 0, 0, 0, 0
     n_steps = 0
-    batch_size = hparams.batch_size
 
     with torch.no_grad():
         data_names = list(data_loaders.keys())
@@ -267,6 +277,10 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 signal = signal.to(device)
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
+
+                if signal_scaler is not None:
+                    y = y * signal_scaler
+                    x = x * signal_scaler
 
                 smooth = train_config.get('smooth')
                 r_kl = kl_args['lambda']
@@ -289,6 +303,12 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 elif loss_type == 'data_driven_loss':
                     x_ = physics_vars
                     total = loss(x_, x)
+                elif loss_type == 'baseline_loss':
+                    mu_theta, logvar_theta = physics_vars
+                    mu, logvar = statistic_vars
+
+                    kl, nll_q, nll_p, reg_q, reg_p, total = \
+                        loss(x, mu_theta, logvar_theta, mu, logvar, kl_factor)
                 elif loss_type == 'physics_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                     mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
