@@ -162,6 +162,7 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
     kl_args = train_config['kl_args']
     torso_len = train_config['torso_len']
     signal_scaler = train_config.get('signal_scaler')
+    window = train_config.get('window')
     loss_type = hparams.loss
     total_loss = 0
     kl_loss, nll_p_loss, nll_q_loss, reg_p_loss, reg_q_loss = 0, 0, 0, 0, 0
@@ -182,6 +183,10 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             if signal_scaler is not None:
                 y = y * signal_scaler
                 x = x * signal_scaler
+            
+            if window is not None:
+                y = y[:, :, :window]
+                x = x[:, :, :window]
 
             optimizer.zero_grad()
 
@@ -273,6 +278,7 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
     kl_args = train_config['kl_args']
     torso_len = train_config['torso_len']
     signal_scaler = train_config.get('signal_scaler')
+    window = train_config.get('window')
     loss_type = hparams.loss
     total_loss = 0
     kl_loss, nll_p_loss, nll_q_loss, reg_p_loss, reg_q_loss = 0, 0, 0, 0, 0
@@ -293,6 +299,10 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 if signal_scaler is not None:
                     y = y * signal_scaler
                     x = x * signal_scaler
+                
+                if window is not None:
+                    y = y[:, :, :window]
+                    x = x[:, :, :window]
 
                 smooth = train_config.get('smooth')
                 r_kl = kl_args['lambda']

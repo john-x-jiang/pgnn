@@ -23,6 +23,7 @@ def evaluate_driver(model, data_loaders, metrics, hparams, exp_dir, data_tag):
 def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eval_config, loss_type=None):
     torso_len = eval_config['torso_len']
     signal_scaler = eval_config.get('signal_scaler')
+    window = eval_config.get('window')
     
     model.eval()
     n_steps = 0
@@ -50,6 +51,10 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                 if signal_scaler is not None:
                     y = y * signal_scaler
                     x = x * signal_scaler
+                
+                if window is not None:
+                    y = y[:, :, :window]
+                    x = x[:, :, :window]
 
                 physics_vars, _ = model(y, data_name)
                 if loss_type == 'dmm_loss':
@@ -75,9 +80,6 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                     q_recons[data_name] = np.concatenate((q_recons[data_name], tensor2np(x_)), axis=0)
                     all_xs[data_name] = np.concatenate((all_xs[data_name], tensor2np(x)), axis=0)
                     all_labels[data_name] = np.concatenate((all_labels[data_name], tensor2np(label)), axis=0)
-
-                x = x[:, 200:, :]
-                x_ = x_[:, 200:, :]
 
                 for met in metrics:
                     if met.__name__ == 'mse':
@@ -147,7 +149,7 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
         if met.__name__ == 'scar_tcc':
             print_results(exp_dir, 'scar_tcc', scar_tccs)
 
-    # save_result(exp_dir, q_recons, all_xs, all_labels, data_tag)
+    save_result(exp_dir, q_recons, all_xs, all_labels, data_tag)
 
 
 def print_results(exp_dir, met_name, mets):
