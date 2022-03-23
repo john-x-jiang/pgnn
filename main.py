@@ -30,6 +30,7 @@ def parse_args():
     parser.add_argument('--seed', type=int, default=123, help='random seed')
     parser.add_argument('--stage', type=int, default=1, help='1.Training, 2. Testing')
     parser.add_argument('--checkpt', type=str, default='None', help='checkpoint to resume training from')
+    parser.add_argument('--finetune', type=int, default='0', help='Fine-tuning from a pretrained model')
     parser.add_argument('--tag', type=str, default='test', help='dataset')
 
     args = parser.parse_args()
@@ -126,8 +127,6 @@ def train(hparams, checkpt, train_loaders, valid_loaders, exp_dir):
     epoch_start = 1
     if checkpt is not None:
         model.load_state_dict(checkpt['state_dict'])
-        learning_rate = checkpt['cur_learning_rate']
-        epoch_start = checkpt['epoch'] + 1
 
     # loss & metrics
     loss = getattr(model_loss, hparams.loss)
@@ -137,11 +136,17 @@ def train(hparams, checkpt, train_loaders, valid_loaders, exp_dir):
     trainable_params = filter(lambda p: p.requires_grad, model.parameters())
     optimizer_info = dict(hparams.optimizer)
     optimizer = getattr(optim, optimizer_info['type'])(trainable_params, **optimizer_info['args'])
-    if checkpt is not None:
+    if checkpt is not None and args.finetune == 0:
         optimizer.load_state_dict(checkpt['optimizer'])
+        learning_rate = checkpt['cur_learning_rate']
+        epoch_start = checkpt['epoch'] + 1
 
     # lr scheduler
-    lr_scheduler = None if not hparams.lr_scheduler else getattr(optim.lr_scheduler, hparams.lr_scheduler)
+    if not hparams.lr_scheduler:
+        lr_scheduler = None
+    else:
+        lr_scheduler_info = dict(hparams.lr_scheduler)
+        lr_scheduler = getattr(optim.lr_scheduler, lr_scheduler_info['type'])(optimizer, **lr_scheduler_info['args'])
     
     # count number of parameters in the mdoe
     num_params = get_network_paramcount(model)

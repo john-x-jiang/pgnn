@@ -67,7 +67,7 @@ def train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, \
 
         # Step LR
         if lr_scheduler is not None:
-            lr_scheduler.step(val_loss)
+            lr_scheduler.step()
             last_lr = lr_scheduler._last_lr
         else:
             last_lr = 1
@@ -221,6 +221,18 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
 
                 kl, nll_q, nll_p, reg_q, reg_p, total = \
                     loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
+            elif loss_type == 'physics_time_loss':
+                x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                z_q, z_p, _, _ = statistic_vars
+
+                kl, nll_q, nll_p, reg_q, reg_p, total = \
+                    loss(y, y_q, y_p, x_q, x_p, z_q, z_p, r1, r2)
+            elif loss_type == 'physics_st_loss':
+                x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                z_q, z_p, _, _ = statistic_vars
+
+                kl, nll_q, nll_p, reg_q, reg_p, total = \
+                    loss(y, y_q, y_p, x_q, x_p, LX_q, LX_p, r1=r1, smooth=smooth)
             elif loss_type == 'stochastic_ddr_loss':
                 x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                 mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
@@ -315,7 +327,18 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
 
                     kl, nll_q, nll_p, reg_q, reg_p, total = \
                         loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
-                    
+                elif loss_type == 'physics_time_loss':
+                    x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                    z_q, z_p, _, _ = statistic_vars
+
+                    kl, nll_q, nll_p, reg_q, reg_p, total = \
+                        loss(y, y_q, y_p, x_q, x_p, z_q, z_p, r1, r2)
+                elif loss_type == 'physics_st_loss':
+                    x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
+                    z_q, z_p, _, _ = statistic_vars
+
+                    kl, nll_q, nll_p, reg_q, reg_p, total = \
+                        loss(y, y_q, y_p, x_q, x_p, LX_q, LX_p, r1=r1, smooth=smooth)
                 elif loss_type == 'stochastic_ddr_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                     mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars

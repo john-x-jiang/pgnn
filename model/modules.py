@@ -260,8 +260,10 @@ class Propagation(nn.Module):
 
         if fxn_type == 'linear':
             self.ode_fxn = nn.ModuleList()
-            for i in range(num_layers):
-                self.ode_fxn.append(nn.Linear(latent_dim, latent_dim))
+            self.ode_fxn.append(nn.Linear(latent_dim, 2 * latent_dim))
+            for i in range(num_layers - 2):
+                self.ode_fxn.append(nn.Linear(2 * latent_dim, 2 * latent_dim))
+            self.ode_fxn.append(nn.Linear(2 * latent_dim, latent_dim))
         else:
             raise NotImplemented
         
@@ -318,14 +320,14 @@ class Propagation(nn.Module):
             mu = mu.view(steps, N, V, C)
             var = var.view(steps, N, V, C)
             if steps != 1:
-                mu = mu.permute(1, 3, 2, 0).contiguous()
-                var = var.permute(1, 3, 2, 0).contiguous()
+                mu = mu.permute(1, 2, 3, 0).contiguous()
+                var = var.permute(1, 2, 3, 0).contiguous()
 
             return mu, var
         else:
             x = x.view(steps, N, V, C)
             if steps != 1:
-                x = x.permute(1, 3, 2, 0).contiguous()
+                x = x.permute(1, 2, 3, 0).contiguous()
             return x
 
 

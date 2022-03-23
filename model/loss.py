@@ -102,6 +102,49 @@ def physics_loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq=None, var_p_seq=None, mu_q_se
     return kl_m, nll_m_q, nll_m_p, reg_m_q, reg_m_p, loss
 
 
+def physics_time_loss(y, y_q, y_p, x_q, x_p, z_q, z_p, r1=1, r2=0):
+    B, T = y.shape[0], y.shape[-1]
+    nll_raw_q = mse_loss(y_q, y[:, :, :T], 'none')
+    reg_raw_q = mse_loss(z_q, z_p, 'none')
+    
+    nll_raw_p = mse_loss(y_p, y[:, :, :T], 'none')
+    reg_raw_p = mse_loss(x_q, x_p, 'none')
+
+    nll_m_q = nll_raw_q.sum() / B
+    reg_m_q = reg_raw_q.sum() / B
+
+    nll_m_p = nll_raw_p.sum() / B
+    reg_m_p = reg_raw_p.sum() / B
+
+    kl_m = torch.zeros_like(y).sum() / B
+
+    loss = nll_m_q + r1 * reg_m_q + r2 * (nll_m_p + reg_m_p)
+
+    return kl_m, nll_m_q, nll_m_p, reg_m_q, reg_m_p, loss
+
+
+def physics_st_loss(y, y_q, y_p, x_q, x_p, LX_q, LX_p, r1=1, r2=0, smooth=1e-3):
+    B, T = y.shape[0], y.shape[-1]
+    nll_raw_q = mse_loss(y_q, y[:, :, :T], 'none')
+    reg_raw_q = mse_loss(LX_q, torch.zeros_like(LX_q), 'none')
+    
+    nll_raw_p = mse_loss(y_p, y[:, :, :T], 'none')
+    reg_raw_p = mse_loss(LX_p, torch.zeros_like(LX_p), 'none')
+    reg_raw_x = mse_loss(x_q, x_p, 'none')
+
+    nll_m_q = nll_raw_q.sum() / B
+    reg_m_q = reg_raw_q.sum() / B
+
+    nll_m_p = nll_raw_p.sum() / B
+    reg_m_p = reg_raw_p.sum() / B
+
+    reg_m_x = reg_raw_x.sum() / B
+
+    loss = nll_m_q + smooth * reg_m_q + nll_m_p + smooth * reg_m_p + r1 * reg_m_x
+
+    return reg_m_x, nll_m_q, nll_m_p, reg_m_q, reg_m_p, loss
+
+
 def baseline_loss(x, mu_theta, logvar_theta, mu, logvar, kl_annealing_factor):
     B, T = x.shape[0], x.shape[-1]
     diff_sq = (x - mu_theta).pow(2)
