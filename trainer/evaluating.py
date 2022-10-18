@@ -85,10 +85,11 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                     if met.__name__ == 'mse':
                         mse = met(x_, x)
                         mse = tensor2np(mse)
+                        res = mse.mean((1, 2))
                         if idx == 0:
-                            mses[data_name] = mse
+                            mses[data_name] = res
                         else:
-                            mses[data_name] = np.concatenate((mses[data_name], mse), axis=0)
+                            mses[data_name] = np.concatenate((mses[data_name], res), axis=0)
                     if met.__name__ == 'tcc':
                         if type(x) == torch.Tensor or type(x_) == torch.Tensor:
                             x = tensor2np(x)
@@ -157,10 +158,16 @@ def print_results(exp_dir, met_name, mets):
         os.makedirs(exp_dir + '/data')
     
     data_names = list(mets.keys())
+    met = []
     for data_name in data_names:
+        met.append(mets[data_name])
         print('{}: {} for full seq = {:05.5f}'.format(data_name, met_name, mets[data_name].mean()))
         with open(os.path.join(exp_dir, 'data/metric.txt'), 'a+') as f:
             f.write('{}: {} for full seq = {}\n'.format(data_name, met_name, mets[data_name].mean()))
+    met = np.hstack(met)
+    print('total: {} for full seq avg = {:05.5f}, std = {:05.5f}'.format(met_name, met.mean(), met.std()))
+    with open(os.path.join(exp_dir, 'data/metric.txt'), 'a+') as f:
+        f.write('total: {} for full seq avg = {}, std = {}\n'.format(met_name, met.mean(), met.std()))
 
 
 def save_result(exp_dir, recons, all_xs, all_labels, data_tag, obs_len=None):

@@ -14,7 +14,7 @@ from utils import util
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
-def train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, \
+def train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, finetune, \
     train_loaders, valid_loaders, loss, metrics, hparams, exp_dir):
     train_loss, val_loss = [], []
 
@@ -27,7 +27,7 @@ def train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, \
     metric_err = None
     not_improved_count = 0
 
-    if checkpt is not None:
+    if checkpt is not None and finetune == 0:
         train_loss, val_loss = checkpt['train_loss'], checkpt['val_loss']
 
         kl_t, kl_e = checkpt['kl_t'], checkpt['kl_e']

@@ -153,7 +153,7 @@ def train(hparams, checkpt, train_loaders, valid_loaders, exp_dir):
     print('Number of parameters: {}'.format(num_params))
 
     # train model
-    training.train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, \
+    training.train_driver(model, checkpt, epoch_start, optimizer, lr_scheduler, args.finetune, \
         train_loaders, valid_loaders, loss, metrics, hparams, exp_dir)
 
 
@@ -197,6 +197,7 @@ def main(hparams, checkpt, training=True, data_tag='test'):
         # start training
         train(hparams, checkpt, train_loaders, valid_loaders, exp_dir)
     else:
+        hparams.batch_size = 1
         # load data
         data_loaders = data_loading(hparams, training, data_tag)
 
