@@ -22,11 +22,15 @@ class HeartGraphDataset(Dataset):
                  num_mesh=None,
                  seq_len=None,
                  split='train',
+                 train_name='train',
                  subset=1):
         self.root = osp.expanduser(osp.normpath(root))
         self.raw_dir = osp.join(self.root, 'signal/{}/'.format(data_name))
 
-        filename = '{}_{}_{}.mat'.format(split, signal_type, num_mesh)
+        if split == 'train':
+            filename = '{}_{}_{}.mat'.format(train_name, signal_type, num_mesh)
+        else:
+            filename = '{}_{}_{}.mat'.format(split, signal_type, num_mesh)
         self.data_path = osp.join(self.raw_dir, filename)
         matFiles = scipy.io.loadmat(self.data_path, squeeze_me=True, struct_as_record=False)
         dataset = matFiles['params']

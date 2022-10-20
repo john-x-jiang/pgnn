@@ -43,6 +43,7 @@ def data_loading(hparams, training=True, data_tag='test'):
     data_dir = data_config['data_dir']
     num_workers = data_config['num_workers']
     data_names = data_config['data_names']
+    train_name = data_config['train_name']
     signal_type = data_config['signal_type']
     num_meshes = data_config['num_meshes']
     seq_len = data_config['seq_len']
@@ -60,6 +61,7 @@ def data_loading(hparams, training=True, data_tag='test'):
                 batch_size=batch_size,
                 data_dir=data_dir,
                 split=split_train,
+                train_name=train_name,
                 shuffle=True,
                 num_workers=num_workers,
                 data_name=data_name,
