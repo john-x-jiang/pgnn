@@ -57,15 +57,11 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                     x = x[:, :, :window]
 
                 physics_vars, _ = model(y, data_name)
-                if loss_type == 'dmm_loss':
-                    x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
-                    x_ = x_q
-                elif loss_type == 'data_driven_loss':
+                if loss_type == 'data_driven_loss':
                     x_ = physics_vars
                 elif loss_type == 'baseline_loss':
                     x_, _ = physics_vars
-                elif loss_type == 'physics_loss' or loss_type == 'stochastic_ddr_loss' \
-                    or loss_type == 'physics_time_loss' or loss_type == 'physics_st_loss':
+                elif loss_type == 'physics_loss' or loss_type == 'mixed_loss':
                     x_q, LX_q, y_q, x_p, LX_p, y_p = physics_vars
                     x_ = x_q
                     # x_ = x_p
