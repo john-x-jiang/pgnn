@@ -59,7 +59,7 @@ def physics_loss(y, y_q, y_p, LX_q, LX_p, mu_p_seq=None, var_p_seq=None, mu_q_se
 
 
 def mixed_loss(y, y_, x, x_, LX, mu_p_seq=None, var_p_seq=None, mu_q_seq=None, var_q_seq=None, 
-               kl_annealing_factor=1, r1=1, r2=0, smooth=5e-3):
+               kl_annealing_factor=1, r1=1, r2=0, smooth=5e-3, is_real=None):
     B, T = y.shape[0], y.shape[-1]
     nll_raw_q = mse_loss(y_, y[:, :, :T], 'none')
     reg_raw_q = mse_loss(LX, torch.zeros_like(LX), 'none')
@@ -78,7 +78,13 @@ def mixed_loss(y, y_, x, x_, LX, mu_p_seq=None, var_p_seq=None, mu_q_seq=None, v
     else:
         kl_m = torch.zeros_like(y).sum() / B
 
-    loss = kl_m * kl_annealing_factor + r1 * nll_m_q + smooth * reg_m_q + r2 * nll_m_p
+    # loss = kl_m * kl_annealing_factor + r1 * nll_m_q + smooth * reg_m_q + r2 * nll_m_p
+    if not is_real:
+        loss = kl_m * kl_annealing_factor + r1 * nll_m_q + r2 * nll_m_p
+        reg_m_q = torch.zeros_like(reg_m_q)
+    else:
+        loss = kl_m * kl_annealing_factor + r1 * nll_m_q + smooth * reg_m_q
+        nll_m_p = torch.zeros_like(nll_m_p)
 
     return kl_m, nll_m_q, nll_m_p, reg_m_q, reg_m_p, loss
 

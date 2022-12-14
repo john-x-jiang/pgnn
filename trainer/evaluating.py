@@ -48,6 +48,8 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
+                is_real = True if -1 in label[:, 1] else False
+
                 if signal_scaler is not None:
                     y = y * signal_scaler
                     x = x * signal_scaler
@@ -77,60 +79,75 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                     all_xs[data_name] = np.concatenate((all_xs[data_name], tensor2np(x)), axis=0)
                     all_labels[data_name] = np.concatenate((all_labels[data_name], tensor2np(label)), axis=0)
 
-                for met in metrics:
-                    if met.__name__ == 'mse':
-                        mse = met(x_, x)
-                        mse = tensor2np(mse)
-                        res = mse.mean((1, 2))
-                        if idx == 0:
-                            mses[data_name] = res
-                        else:
-                            mses[data_name] = np.concatenate((mses[data_name], res), axis=0)
-                    if met.__name__ == 'tcc':
-                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
-                            x = tensor2np(x)
-                            x_ = tensor2np(x_)
-                        tcc = met(x_, x)
-                        if idx == 0:
-                            tccs[data_name] = tcc
-                        else:
-                            tccs[data_name] = np.concatenate((tccs[data_name], tcc), axis=0)
-                    if met.__name__ == 'scc':
-                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
-                            x = tensor2np(x)
-                            x_ = tensor2np(x_)
-                        scc = met(x_, x)
-                        if idx == 0:
-                            sccs[data_name] = scc
-                        else:
-                            sccs[data_name] = np.concatenate((sccs[data_name], scc), axis=0)
-                    if met.__name__ == 'dcc':
-                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
-                            x = tensor2np(x)
-                            x_ = tensor2np(x_)
-                        dcc = met(x_, x)
-                        if idx == 0:
-                            dccs[data_name] = dcc
-                        else:
-                            dccs[data_name] = np.concatenate((dccs[data_name], dcc), axis=0)
-                    if met.__name__ == 'dcc_fix_th':
-                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
-                            x = tensor2np(x)
-                            x_ = tensor2np(x_)
-                        dcc = met(x_, x)
-                        if idx == 0:
-                            dccs[data_name] = dcc
-                        else:
-                            dccs[data_name] = np.concatenate((dccs[data_name], dcc), axis=0)
-                    if met.__name__ == 'scar_tcc':
-                        if type(x) == torch.Tensor or type(x_) == torch.Tensor:
-                            x = tensor2np(x)
-                            x_ = tensor2np(x_)
-                        scar_tcc = met(x_, x)
-                        if idx == 0:
-                            scar_tccs[data_name] = scar_tcc
-                        else:
-                            scar_tccs[data_name] = np.concatenate((scar_tccs[data_name], scar_tcc), axis=0)
+                if not is_real:
+                    for met in metrics:
+                        if met.__name__ == 'mse':
+                            mse = met(x_, x)
+                            mse = tensor2np(mse)
+                            res = mse.mean((1, 2))
+                            if idx == 0:
+                                mses[data_name] = res
+                            else:
+                                mses[data_name] = np.concatenate((mses[data_name], res), axis=0)
+                        if met.__name__ == 'tcc':
+                            if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                                x = tensor2np(x)
+                                x_ = tensor2np(x_)
+                            tcc = met(x_, x)
+                            if idx == 0:
+                                tccs[data_name] = tcc
+                            else:
+                                tccs[data_name] = np.concatenate((tccs[data_name], tcc), axis=0)
+                        if met.__name__ == 'scc':
+                            if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                                x = tensor2np(x)
+                                x_ = tensor2np(x_)
+                            scc = met(x_, x)
+                            if idx == 0:
+                                sccs[data_name] = scc
+                            else:
+                                sccs[data_name] = np.concatenate((sccs[data_name], scc), axis=0)
+                        if met.__name__ == 'dcc':
+                            if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                                x = tensor2np(x)
+                                x_ = tensor2np(x_)
+                            dcc = met(x_, x)
+                            if idx == 0:
+                                dccs[data_name] = dcc
+                            else:
+                                dccs[data_name] = np.concatenate((dccs[data_name], dcc), axis=0)
+                        if met.__name__ == 'dcc_fix_th':
+                            if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                                x = tensor2np(x)
+                                x_ = tensor2np(x_)
+                            dcc = met(x_, x)
+                            if idx == 0:
+                                dccs[data_name] = dcc
+                            else:
+                                dccs[data_name] = np.concatenate((dccs[data_name], dcc), axis=0)
+                        if met.__name__ == 'scar_tcc':
+                            if type(x) == torch.Tensor or type(x_) == torch.Tensor:
+                                x = tensor2np(x)
+                                x_ = tensor2np(x_)
+                            scar_tcc = met(x_, x)
+                            if idx == 0:
+                                scar_tccs[data_name] = scar_tcc
+                            else:
+                                scar_tccs[data_name] = np.concatenate((scar_tccs[data_name], scar_tcc), axis=0)
+                else:
+                    for met in metrics:
+                        if met.__name__ == 'mse':
+                            mses[data_name] = None
+                        if met.__name__ == 'tcc':
+                            tccs[data_name] = None
+                        if met.__name__ == 'scc':
+                            sccs[data_name] = None
+                        if met.__name__ == 'dcc':
+                            dccs[data_name] = None
+                        if met.__name__ == 'dcc_fix_th':
+                            dccs[data_name] = None
+                        if met.__name__ == 'scar_tcc':
+                            scar_tccs[data_name] = None
 
     for met in metrics:
         if met.__name__ == 'mse':
@@ -156,10 +173,14 @@ def print_results(exp_dir, met_name, mets):
     data_names = list(mets.keys())
     met = []
     for data_name in data_names:
+        if mets[data_name] is None:
+            continue
         met.append(mets[data_name])
         print('{}: {} for full seq = {:05.5f}'.format(data_name, met_name, mets[data_name].mean()))
         with open(os.path.join(exp_dir, 'data/metric.txt'), 'a+') as f:
             f.write('{}: {} for full seq = {}\n'.format(data_name, met_name, mets[data_name].mean()))
+    if len(met) == 0:
+        return
     met = np.hstack(met)
     print('total: {} for full seq avg = {:05.5f}, std = {:05.5f}'.format(met_name, met.mean(), met.std()))
     with open(os.path.join(exp_dir, 'data/metric.txt'), 'a+') as f:

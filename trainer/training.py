@@ -180,6 +180,8 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             x = signal[:, :-torso_len]
             y = signal[:, -torso_len:]
 
+            is_real = True if -1 in label[:, 1] else False
+
             if signal_scaler is not None:
                 y = y * signal_scaler
                 x = x * signal_scaler
@@ -225,7 +227,7 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
                 mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                 kl, nll_q, nll_p, reg_q, reg_p, total = \
-                    loss(y, y_q, x, x_q, LX_q, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
+                    loss(y, y_q, x, x_q, LX_q, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth, is_real)
             else:
                 raise NotImplemented
 
@@ -278,6 +280,8 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
+                is_real = True if -1 in label[:, 1] else False
+
                 if signal_scaler is not None:
                     y = y * signal_scaler
                     x = x * signal_scaler
@@ -318,7 +322,7 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                     mu_q_seq, var_q_seq, mu_p_seq, var_p_seq = statistic_vars
 
                     kl, nll_q, nll_p, reg_q, reg_p, total = \
-                        loss(y, y_q, x, x_q, LX_q, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth)
+                        loss(y, y_q, x, x_q, LX_q, mu_p_seq, var_p_seq, mu_q_seq, var_q_seq, kl_factor, r1, r2, smooth, is_real)
                 else:
                     raise NotImplemented
 

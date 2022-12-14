@@ -43,17 +43,21 @@ def data_loading(hparams, training=True, data_tag='test'):
     data_dir = data_config['data_dir']
     num_workers = data_config['num_workers']
     data_names = data_config['data_names']
-    train_name = data_config['train_name']
+    train_names = data_config['train_name']
     signal_type = data_config['signal_type']
     num_meshes = data_config['num_meshes']
     seq_len = data_config['seq_len']
+
+    if type(train_names) == str:
+        num_data = len(data_names)
+        train_names = [train_names] * num_data
 
     if training:
         train_loaders, valid_loaders = {}, {}
     else:
         test_loaders = {}
     
-    for data_name, num_mesh in zip(data_names, num_meshes):
+    for data_name, num_mesh, train_name in zip(data_names, num_meshes, train_names):
         if training:
             batch_size = hparams.batch_size
             split_train = 'train'
