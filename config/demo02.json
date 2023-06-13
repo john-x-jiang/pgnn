@@ -1,0 +1,94 @@
+{
+    "exp_name": "demo",
+    "exp_id": "02",
+    
+    "model": {
+        "type": "BayesianFilterTimeAdapt",
+        "args": {
+            "num_channel": [
+                1,
+                8,
+                16,
+                32,
+                64,
+                128,
+                256
+            ],
+            "latent_dim": 64,
+            "rnn_type": "gru",
+            "ode_args": {
+                "fxn_type": "linear",
+                "num_layers": 4,
+                "rtol": 1e-5,
+                "atol": 1e-7,
+                "method": "rk4",
+                "adjoint": true
+            }
+        }
+    },
+
+    "data":{
+        "data_set": "HeartDataLoader",
+        "data_dir": "data/",
+        "data_names": ["EC_sparse_0", "EC_sparse_1", "EC_sparse_2", "EC_sparse_5"],
+        "train_name": "train",
+        "signal_type": "egm",
+        "num_meshes": [568, 568, 568, 568],
+        "seq_len": [65, 33, 130, 17],
+        "graph_method": "bipartite",
+        "num_workers": 1
+    },
+
+    "optimizer": {
+        "type": "Adam",
+        "args": {
+            "lr": 5e-4,
+            "amsgrad": false,
+            "betas": [0.9, 0.999]
+        }
+    },
+    "lr_scheduler": {
+        "type": "StepLR",
+        "args": {
+            "step_size": 200,
+            "gamma": 0.5
+        }
+    },
+
+    "loss": "physics_loss",
+    "metrics": [
+        "mse", "tcc", "scc"
+    ],
+
+    "batch_size": 2,
+    "ecgi": 1,
+    "device": 0,
+    "training": {
+        "epochs": 600,
+        "overfit_single_batch": false,
+
+        "save_period": 10,
+
+        "monitor": "min val_loss",
+        "early_stop": 100,
+
+        "torso_len": 120,
+        "time_resolution": true,
+
+        "kl_args":{
+            "min_annealing_factor": 0.0,
+            "anneal_update": 1000,
+            "elbo": "sum",
+            "lambda": 1
+        },
+        "r1": 1,
+        "r2": 0,
+        "smooth": 1e-3
+    },
+    "evaluating": {
+        "torso_len": 120,
+        "time_resolution": true
+    },
+    
+    "best_model": "m_best"
+}
