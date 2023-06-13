@@ -24,6 +24,7 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
     torso_len = eval_config['torso_len']
     signal_scaler = eval_config.get('signal_scaler')
     window = eval_config.get('window')
+    time_resolution = eval_config.get('time_resolution')
     
     model.eval()
     n_steps = 0
@@ -48,17 +49,22 @@ def evaluate_epoch(model, data_loaders, metrics, exp_dir, hparams, data_tag, eva
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
-                is_real = True if -1 in label[:, 1] else False
+                is_real = True if -1 in label[:, 1].int() else False
 
                 if signal_scaler is not None:
                     y = y * signal_scaler
                     x = x * signal_scaler
                 
+                if time_resolution is not None:
+                    tr = label[:, 2][0].numpy()
+                else:
+                    tr = None
+                
                 if window is not None:
                     y = y[:, :, :window]
                     x = x[:, :, :window]
 
-                physics_vars, _ = model(y, data_name)
+                physics_vars, _ = model(y, data_name, tr)
                 if loss_type == 'data_driven_loss':
                     x_ = physics_vars
                 elif loss_type == 'baseline_loss':
@@ -176,9 +182,9 @@ def print_results(exp_dir, met_name, mets):
         if mets[data_name] is None:
             continue
         met.append(mets[data_name])
-        print('{}: {} for full seq = {:05.5f}'.format(data_name, met_name, mets[data_name].mean()))
+        print('{}: {} for full seq avg = {:05.5f}, std = {:05.5f}'.format(data_name, met_name, mets[data_name].mean(), mets[data_name].std()))
         with open(os.path.join(exp_dir, 'data/metric.txt'), 'a+') as f:
-            f.write('{}: {} for full seq = {}\n'.format(data_name, met_name, mets[data_name].mean()))
+            f.write('{}: {} for full seq avg = {}, std = {}\n'.format(data_name, met_name, mets[data_name].mean(), mets[data_name].std()))
     if len(met) == 0:
         return
     met = np.hstack(met)

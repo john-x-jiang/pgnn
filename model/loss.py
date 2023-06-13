@@ -13,10 +13,6 @@ def kl_div(mu1, var1, mu2=None, var2=None):
     if var2 is None:
         var2 = torch.zeros_like(mu1)
 
-    # return 0.5 * (
-    #     var2.log() - var1.log() + (
-    #         var1 + (mu1 - mu2).pow(2)
-    #     ) / var2 - 1)
     return 0.5 * (
         var2 - var1 + (
             torch.exp(var1) + (mu1 - mu2).pow(2)

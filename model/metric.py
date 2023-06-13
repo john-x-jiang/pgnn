@@ -124,12 +124,3 @@ def scar_tcc(u, x):
         res.append(correlation_sum)
     res = np.array(res)
     return res
-
-
-def save_data(u, x, u_threshold, x_threshold):
-    import scipy.io as sio
-    u_sample = np.zeros_like(u[0, :, 50])
-    x_sample = np.zeros_like(x[0, :, 50])
-    u_sample[u[0, :, 50] > u_threshold] = 1
-    x_sample[x[0, :, 50] > x_threshold] = 1
-    sio.savemat('./experiments/multi_seg/01/data/u_fixed.mat', {'u': u_sample, 'x': x_sample})

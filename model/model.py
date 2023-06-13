@@ -100,7 +100,7 @@ class Euclidean(BaseModel):
         out2 = out2.permute(1, 2, 0).contiguous()
         return out1, out2
     
-    def forward(self, x, heart_name):
+    def forward(self, x, heart_name, time_resolution=None):
         mu, logvar = self.encode(x, heart_name)
         z = self.reparameterize(mu, logvar)
         mu_theta, logvar_theta = self.decode(z, heart_name)
@@ -272,7 +272,7 @@ class ST_GCNN(BaseModel):
         x = x.view(batch_size, -1, self.ns[0])
         return x
     
-    def forward(self, y, heart_name):
+    def forward(self, y, heart_name, time_resolution=None):
         z = self.encode(y, heart_name)
         z_h = self.inverse(z, heart_name)
         x = self.decode(z_h, heart_name)
@@ -283,17 +283,17 @@ class BayesianFilter(BaseModel):
     def __init__(self,
                  num_channel,
                  latent_dim,
-                 ode_func_type,
-                 ode_num_layers,
-                 ode_method,
-                 rnn_type):
+                 rnn_type,
+                 dt=1,
+                 steps=1,
+                 ode_args=None):
         super().__init__()
         self.nf = num_channel
         self.latent_dim = latent_dim
-        self.ode_func_type = ode_func_type
-        self.ode_num_layers = ode_num_layers
-        self.ode_method = ode_method
         self.rnn_type = rnn_type
+        self.dt = dt
+        self.steps = steps
+        self.ode_args = ode_args
 
         # encoder + inverse
         self.conv1 = Spatial_Block(self.nf[0], self.nf[2], dim=3, kernel_size=(3, 1), process='e', norm=False)
@@ -306,7 +306,7 @@ class BayesianFilter(BaseModel):
         self.trans = Spline(latent_dim, latent_dim, dim=3, kernel_size=3, norm=False, degree=2, root_weight=False, bias=False)
         
         # Bayesian filter
-        self.propagation = Propagation(latent_dim, fxn_type=ode_func_type, num_layers=ode_num_layers, method=ode_method, rtol=1e-5, atol=1e-7)
+        self.propagation = Propagation(latent_dim, **ode_args)
         self.correction = Correction(latent_dim, rnn_type=rnn_type, dim=3, kernel_size=3, norm=False)
 
         # decoder
@@ -429,12 +429,18 @@ class BayesianFilter(BaseModel):
         outputs = []
         outputs.append(last_h.view(1, N, V, C))
 
+        outputs_ode = []
+        outputs_ode.append(last_h.view(1, N, V, C))
+
         x = x.view(T, N * V, C)
         for t in range(1, T):
             last_h = last_h.view(N, V, -1)
 
             # Propagation
-            last_h = self.propagation(last_h, 1, steps=1)
+            last_h = self.propagation(last_h, self.dt, steps=self.steps)
+
+            last_h = last_h[-1, :, :, :]
+            outputs_ode.append(last_h.view(1, N, V, C))
             # Corrrection
             last_h = last_h.view(N * V, -1)
             h = self.correction(x[t], last_h, edge_index, edge_attr)
@@ -486,7 +492,7 @@ class BayesianFilter(BaseModel):
         y_ = torch.matmul(self.H[heart_name], x_)
         return LX, y_
 
-    def forward(self, y, heart_name):
+    def forward(self, y, heart_name, time_resolution=None):
         embed = self.embedding(y, heart_name)
         z = self.time_modeling(embed, heart_name)
         x = self.decoder(z, heart_name)
@@ -494,21 +500,21 @@ class BayesianFilter(BaseModel):
         return (x, LX, y, None, None, None), (None, None, None, None)
 
 
-class VariationalBF(BaseModel):
+class BayesianFilterTimeAdapt(BaseModel):
     def __init__(self,
                  num_channel,
                  latent_dim,
-                 ode_func_type,
-                 ode_num_layers,
-                 ode_method,
-                 rnn_type):
+                 rnn_type,
+                 dt=1,
+                 steps=1,
+                 ode_args=None):
         super().__init__()
         self.nf = num_channel
         self.latent_dim = latent_dim
-        self.ode_func_type = ode_func_type
-        self.ode_num_layers = ode_num_layers
-        self.ode_method = ode_method
         self.rnn_type = rnn_type
+        self.dt = dt
+        self.steps = steps
+        self.ode_args = ode_args
 
         # encoder + inverse
         self.conv1 = Spatial_Block(self.nf[0], self.nf[2], dim=3, kernel_size=(3, 1), process='e', norm=False)
@@ -520,8 +526,9 @@ class VariationalBF(BaseModel):
 
         self.trans = Spline(latent_dim, latent_dim, dim=3, kernel_size=3, norm=False, degree=2, root_weight=False, bias=False)
         
-        self.propagation = Propagation(latent_dim, fxn_type=ode_func_type, num_layers=ode_num_layers, method=ode_method, rtol=1e-5, atol=1e-7, stochastic=True)
-        self.correction = Correction(latent_dim, rnn_type=rnn_type, dim=3, kernel_size=3, norm=False, stochastic=True)
+        # Bayesian filter
+        self.propagation = Propagation(latent_dim, **ode_args)
+        self.correction = Correction(latent_dim, rnn_type=rnn_type, dim=3, kernel_size=3, norm=False)
 
         # decoder
         self.fcd3 = nn.Conv2d(latent_dim, self.nf[5], 1)
@@ -633,82 +640,50 @@ class VariationalBF(BaseModel):
         x_bin = x_bin[:, 0:-num_left, :, :]
         return x_bin
     
-    def reparameterization(self, mu, logvar):
-        # std = torch.sqrt(var)
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
-    
-    def time_modeling(self, x, heart_name):
+    def time_modeling(self, x, heart_name, time_resolution=None):
         N, V, C, T = x.shape
         edge_index, edge_attr = self.bg4[heart_name].edge_index, self.bg4[heart_name].edge_attr
 
         x = x.permute(3, 0, 1, 2).contiguous()
-        # last_h = x[0]
+        last_h = x[0]
 
-        mu_p_seq, logvar_p_seq = [], []
-        mu_q_seq, logvar_q_seq = [], []
-        z_q_seq, z_p_seq = [], []
-        # outputs = []
-        # outputs.append(last_h.view(1, N, V, C))
+        outputs = []
+        outputs.append(last_h.view(1, N, V, C))
+
+        outputs_ode = []
+        outputs_ode.append(last_h.view(1, N, V, C))
 
         x = x.view(T, N * V, C)
-        for t in range(T):
-            # Propagation
-            if t == 0:
-                mu_p, logvar_p = self.propagation.init()
-                mu_p = mu_p.expand(N, V, C)
-                logvar_p = logvar_p.expand(N, V, C)
-                last_h = x[0]
-                last_h = last_h.view(N, V, -1)
+        for t in range(1, T):
+            last_h = last_h.view(N, V, -1)
+
+            if time_resolution > 1:
+                dt = 1 / time_resolution
+                steps = 1
             else:
-                last_h = last_h.view(N, V, -1)
-                mu_p, logvar_p = self.propagation(last_h, 1, steps=1)
+                dt = 1
+                steps = int(1 / time_resolution)
 
-            # mu_p, var_p = self.propagation(last_h, 1, steps=1)
-            mu_p = torch.clamp(mu_p, min=-100, max=85)
-            logvar_p = torch.clamp(logvar_p, min=-100, max=85)
-            z_p = self.reparameterization(mu_p, logvar_p)
+            # Propagation
+            last_h = self.propagation(last_h, dt, steps=steps)
 
+            outputs_ode.append(last_h.view(steps, N, V, C))
+            last_h = last_h[-1, :, :, :]
+            # outputs_ode.append(last_h.view(1, N, V, C))
             # Corrrection
-            z_p = z_p.view(N * V, -1)
-            mu_q, logvar_q = self.correction(x[t], z_p, edge_index, edge_attr)
-            mu_q = torch.clamp(mu_q, min=-100, max=85)
-            logvar_q = torch.clamp(logvar_q, min=-100, max=85)
+            last_h = last_h.view(N * V, -1)
+            h = self.correction(x[t], last_h, edge_index, edge_attr)
 
-            # mu_p = mu_p.view(N * V, -1)
-            # logvar_p = logvar_p.view(N * V, -1)
-            # mu_q = self.correction(x[t], mu_p, edge_index, edge_attr)
-            # logvar_q = self.correction(x[t], logvar_p, edge_index, edge_attr)
-
-            z_q = self.reparameterization(mu_q, logvar_q)
-
-            last_h = z_q
-            # outputs.append(z_q.view(1, N, V, C))
-            z_q_seq.append(z_q.view(1, N, V, C))
-            z_p_seq.append(z_p.view(1, N, V, C))
-            mu_p_seq.append(mu_p.view(1, N, V, C))
-            logvar_p_seq.append(logvar_p.view(1, N, V, C))
-            mu_q_seq.append(mu_q.view(1, N, V, C))
-            logvar_q_seq.append(logvar_q.view(1, N, V, C))
+            last_h = h
+            outputs.append(h.view(1, N, V, C))
         
-        # outputs = torch.cat(outputs, dim=0)
-        z_q_seq = torch.cat(z_q_seq, dim=0)
-        z_p_seq = torch.cat(z_p_seq, dim=0)
-        mu_p_seq = torch.cat(mu_p_seq, dim=0)
-        logvar_p_seq = torch.cat(logvar_p_seq, dim=0)
-        mu_q_seq = torch.cat(mu_q_seq, dim=0)
-        logvar_q_seq = torch.cat(logvar_q_seq, dim=0)
+        outputs = torch.cat(outputs, dim=0)
+        outputs = outputs.permute(1, 2, 3, 0).contiguous()
+        # return outputs
 
-        # outputs = outputs.permute(1, 2, 3, 0).contiguous()
-        z_q_seq = z_q_seq.permute(1, 2, 3, 0).contiguous()
-        z_p_seq = z_p_seq.permute(1, 2, 3, 0).contiguous()
-        mu_p_seq = mu_p_seq.permute(1, 2, 3, 0).contiguous()
-        logvar_p_seq = logvar_p_seq.permute(1, 2, 3, 0).contiguous()
-        mu_q_seq = mu_q_seq.permute(1, 2, 3, 0).contiguous()
-        logvar_q_seq = logvar_q_seq.permute(1, 2, 3, 0).contiguous()
-
-        return z_p_seq, z_q_seq, mu_p_seq, logvar_p_seq, mu_q_seq, logvar_q_seq
+        outputs_ode = torch.cat(outputs_ode, dim=0)
+        outputs_ode = outputs_ode.permute(1, 2, 3, 0).contiguous()
+        return outputs, outputs_ode
     
     def decoder(self, x, heart_name):
         batch_size, seq_len = x.shape[0], x.shape[-1]
@@ -750,13 +725,17 @@ class VariationalBF(BaseModel):
         y_ = torch.matmul(self.H[heart_name], x_)
         return LX, y_
 
-    def forward(self, y, heart_name):
+    def forward(self, y, heart_name, time_resolution=None):
         embed = self.embedding(y, heart_name)
-        z_p_seq, z_q_seq, mu_p_seq, logvar_p_seq, mu_q_seq, logvar_q_seq = self.time_modeling(embed, heart_name)
-        # decode from p
-        x_p = self.decoder(z_p_seq, heart_name)
-        LX_p, y_p = self.physics(x_p, heart_name)
-        # decode from q
-        x_q = self.decoder(z_q_seq, heart_name)
-        LX_q, y_q = self.physics(x_q, heart_name)
-        return (x_q, LX_q, y_q, x_p, LX_p, y_p), (mu_q_seq, logvar_q_seq, mu_p_seq, logvar_p_seq)
+        # z = self.time_modeling(embed, heart_name)
+        # x = self.decoder(z, heart_name)
+        # LX, y = self.physics(x, heart_name)
+        # return (x, LX, y, None, None, None), (None, None, None, None)
+
+        z, z_ = self.time_modeling(embed, heart_name, time_resolution)
+        x = self.decoder(z, heart_name)
+        LX, y = self.physics(x, heart_name)
+
+        x_ = self.decoder(z_, heart_name)
+        LX_, y_ = self.physics(x_, heart_name)
+        return (x, LX, y, x_, LX_, y_), (None, None, None, None)

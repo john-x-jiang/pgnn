@@ -163,6 +163,7 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
     torso_len = train_config['torso_len']
     signal_scaler = train_config.get('signal_scaler')
     window = train_config.get('window')
+    time_resolution = train_config.get('time_resolution')
     loss_type = hparams.loss
     total_loss = 0
     kl_loss, nll_p_loss, nll_q_loss, reg_p_loss, reg_q_loss = 0, 0, 0, 0, 0
@@ -180,12 +181,17 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             x = signal[:, :-torso_len]
             y = signal[:, -torso_len:]
 
-            is_real = True if -1 in label[:, 1] else False
+            is_real = True if -1 in label[:, 1].int() else False
 
             if signal_scaler is not None:
                 y = y * signal_scaler
                 x = x * signal_scaler
             
+            if time_resolution is not None:
+                tr = label[:, 2][0].numpy()
+            else:
+                tr = None
+
             if window is not None:
                 y = y[:, :, :window]
                 x = x[:, :, :window]
@@ -206,7 +212,7 @@ def train_epoch(model, epoch, loss, optimizer, data_loaders, hparams):
             if r2 is None:
                 r2 = 0
             
-            physics_vars, statistic_vars = model(y, data_name)
+            physics_vars, statistic_vars = model(y, data_name, tr)
             if loss_type == 'data_driven_loss':
                 x_ = physics_vars
                 total = loss(x_, x)
@@ -263,6 +269,7 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
     torso_len = train_config['torso_len']
     signal_scaler = train_config.get('signal_scaler')
     window = train_config.get('window')
+    time_resolution = train_config.get('time_resolution')
     loss_type = hparams.loss
     total_loss = 0
     kl_loss, nll_p_loss, nll_q_loss, reg_p_loss, reg_q_loss = 0, 0, 0, 0, 0
@@ -280,11 +287,16 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 x = signal[:, :-torso_len]
                 y = signal[:, -torso_len:]
 
-                is_real = True if -1 in label[:, 1] else False
+                is_real = True if -1 in label[:, 1].int() else False
 
                 if signal_scaler is not None:
                     y = y * signal_scaler
                     x = x * signal_scaler
+                
+                if time_resolution is not None:
+                    tr = label[:, 2][0].numpy()
+                else:
+                    tr = None
                 
                 if window is not None:
                     y = y[:, :, :window]
@@ -301,7 +313,7 @@ def valid_epoch(model, epoch, loss, data_loaders, hparams):
                 if r2 is None:
                     r2 = 0
                 
-                physics_vars, statistic_vars = model(y, data_name)
+                physics_vars, statistic_vars = model(y, data_name, tr)
                 if loss_type == 'data_driven_loss':
                     x_ = physics_vars
                     total = loss(x_, x)

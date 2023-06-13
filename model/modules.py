@@ -247,6 +247,7 @@ class Propagation(nn.Module):
                  rtol=1e-5,
                  atol=1e-7,
                  adjoint=True,
+                 step_size=None,
                  stochastic=False):
         super().__init__()
         self.latent_dim = latent_dim
@@ -256,6 +257,7 @@ class Propagation(nn.Module):
         self.rtol = rtol
         self.atol = atol
         self.adjoint = adjoint
+        self.step_size = step_size
         self.stochastic = stochastic
 
         if fxn_type == 'linear':
@@ -295,7 +297,7 @@ class Propagation(nn.Module):
         if steps == 1:
             self.integration_time = dt * torch.Tensor([0, 1]).float().to(device)
         else:
-            self.integration_time = dt * torch.arange(steps).to(device)
+            self.integration_time = dt * torch.arange(steps + 1).float().to(device)
 
         N, V, C = x.shape
         x = x.contiguous()
@@ -303,13 +305,18 @@ class Propagation(nn.Module):
         solver = lambda t, x: self.ode_solver(t, x)
         if self.adjoint:
             x = torchdiffeq.odeint_adjoint(solver, x, self.integration_time,
-                                           rtol=self.rtol, atol=self.atol, method=self.method, adjoint_params=())
+                                           rtol=self.rtol, atol=self.atol, method=self.method, 
+                                           adjoint_params=(), options={'step_size': self.step_size})
         else:
             x = torchdiffeq.odeint(solver, x, self.integration_time,
-                                   rtol=self.rtol, atol=self.atol, method=self.method)
-        
-        if steps == 1:
-            x = x[-1]
+                                   rtol=self.rtol, atol=self.atol, 
+                                   method=self.method, options={'step_size': self.step_size})
+
+        # if steps == 1:
+        #     x = x[-1]
+        # else:
+        x = x[1:]
+
         x = x.view(steps * N, V, C)
         if self.stochastic:
             mu = self.lin_m(x)
@@ -319,15 +326,15 @@ class Propagation(nn.Module):
 
             mu = mu.view(steps, N, V, C)
             var = var.view(steps, N, V, C)
-            if steps != 1:
-                mu = mu.permute(1, 2, 3, 0).contiguous()
-                var = var.permute(1, 2, 3, 0).contiguous()
+            # if steps != 1:
+            #     mu = mu.permute(1, 2, 3, 0).contiguous()
+            #     var = var.permute(1, 2, 3, 0).contiguous()
 
             return mu, var
         else:
             x = x.view(steps, N, V, C)
-            if steps != 1:
-                x = x.permute(1, 2, 3, 0).contiguous()
+            # if steps != 1:
+            #     x = x.permute(1, 2, 3, 0).contiguous()
             return x
 
 
@@ -738,180 +745,6 @@ class GCLSTM(nn.Module):
         return init_states
 
 
-class RnnEncoder(nn.Module):
-    def __init__(self, input_dim, rnn_dim, kernel_size, dim, is_open_spline=True, degree=1, norm=True,
-                 root_weight=True, bias=True, n_layer=1, nonlin='relu', rnn_type='gru', bd=True,
-                 reverse_input=False, orthogonal_init=False):
-        super().__init__()
-        self.input_dim = input_dim
-        self.rnn_dim = rnn_dim
-        self.n_layer = n_layer
-        self.rnn_type = rnn_type
-        self.bd = bd
-        self.reverse_input = reverse_input
-        self.nonlin = nonlin
-
-        if not isinstance(rnn_type, str):
-            raise ValueError("`rnn_type` should be type str.")
-        self.rnn_type = rnn_type
-        if rnn_type == 'gru':
-            self.rnn = nn.GRU(
-                input_size=input_dim,
-                hidden_size=rnn_dim,
-                batch_first=True,
-                bidirectional=bd,
-                num_layers=n_layer,
-            )
-        elif rnn_type == 'lstm':
-            self.rnn = nn.LSTM(
-                input_size=input_dim,
-                hidden_size=rnn_dim,
-                batch_first=True,
-                bidirectional=bd,
-                num_layers=n_layer,
-            )
-        elif rnn_type == 'gcgru':
-            self.rnn = GCGRU(
-                input_dim=input_dim,
-                hidden_dim=rnn_dim,
-                kernel_size=kernel_size,
-                dim=dim,
-                is_open_spline=is_open_spline,
-                degree=degree,
-                norm=norm,
-                root_weight=root_weight,
-                bias=bias,
-                num_layers=n_layer
-            )
-        elif rnn_type == 'gclstm':
-            self.rnn = GCLSTM(
-                input_dim=input_dim,
-                hidden_dim=rnn_dim,
-                kernel_size=kernel_size,
-                dim=dim,
-                is_open_spline=is_open_spline,
-                degree=degree,
-                norm=norm,
-                root_weight=root_weight,
-                bias=bias,
-                num_layers=n_layer
-            )
-        else:
-            raise ValueError("`rnn_type` must instead be ['gru', 'lstm'] %s"
-                             % rnn_type)
-        
-        if orthogonal_init:
-            self.init_weights()
-        
-    def init_weights(self):
-        for w in self.rnn.parameters():
-            if w.dim() > 1:
-                weight_init.orthogonal_(w)
-    
-    def forward(self, x, edge_index, edge_attr):
-        B, V, _, T = x.shape
-        seq_lengths = T * torch.ones(B).int().to(device)
-
-        if self.reverse_input:
-            x = reverse_sequence(x, seq_lengths)
-
-        x = x.contiguous()
-        if self.rnn_type == 'gru' or self.rnn_type == 'lstm':
-            x = x.view(B * V, -1, T)
-            x = x.permute(0, 2, 1).contiguous()
-            hidden, _ = self.rnn(x)
-            hidden = hidden.permute(0, 2, 1).contiguous()
-            hidden = hidden.view(B, V, -1, T)
-        else:
-            hidden, _ = self.rnn(x, edge_index=edge_index, edge_attr=edge_attr)
-            hidden = hidden[0]
-        
-        if self.reverse_input:
-            hidden = reverse_sequence(hidden, seq_lengths)
-        return hidden
-
-
-class Combiner(nn.Module):
-    def __init__(self, z_dim, rnn_dim, clip=True):
-        super().__init__()
-        self.z_dim = z_dim
-        self.rnn_dim = rnn_dim
-        self.clip = clip
-
-        self.lin1 = nn.Linear(z_dim, rnn_dim)
-        self.act = nn.Tanh()
-
-        self.lin2 = nn.Linear(rnn_dim, z_dim)
-        self.lin_v = nn.Linear(rnn_dim, z_dim)
-
-        self.act_var = nn.Softplus()
-    
-    def init_z_q_0(self, trainable=True):
-        return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable)
-    
-    def forward(self, h_rnn, z_t_1, rnn_bidirection=False):
-        assert z_t_1 is not None
-        h_comb_ = self.act(self.lin1(z_t_1))
-        if rnn_bidirection:
-            h_comb = (1.0 / 3) * (h_comb_ + h_rnn[:, :, :self.rnn_dim] + h_rnn[:, :, self.rnn_dim:])
-        else:
-            h_comb = 0.5 * (h_comb_ + h_rnn)
-        mu = self.lin2(h_comb)
-
-        _var = self.lin_v(h_comb)
-        if self.clip:
-            _var = torch.clamp(_var, min=-100, max=85)
-        var = self.act_var(_var)
-        return mu, var
-
-
-class Transition(nn.Module):
-    def __init__(self, z_dim, transition_dim, identity_init=True, clip=True):
-        super().__init__()
-        self.z_dim = z_dim
-        self.transition_dim = transition_dim
-        self.identity_init = identity_init
-        self.clip = clip
-
-        # compute the gain (gate) of non-linearity
-        self.lin1 = nn.Linear(z_dim, transition_dim)
-        self.lin2 = nn.Linear(transition_dim, z_dim)
-        # compute the proposed mean
-        self.lin3 = nn.Linear(z_dim, transition_dim)
-        self.lin4 = nn.Linear(transition_dim, z_dim)
-        # compute the linearity part
-        self.lin_n = nn.Linear(z_dim, z_dim)
-
-        if identity_init:
-            self.lin_n.weight.data = torch.eye(z_dim)
-            self.lin_n.bias.data = torch.zeros(z_dim)
-
-        # compute the logvar
-        self.lin_v = nn.Linear(z_dim, z_dim)
-        # logvar activation
-        self.act_var = nn.Softplus()
-
-        self.act_weight = nn.Sigmoid()
-        self.act = nn.ELU()
-    
-    def init_z_0(self, trainable=True):
-        return nn.Parameter(torch.zeros(self.z_dim), requires_grad=trainable), \
-            nn.Parameter(torch.ones(self.z_dim), requires_grad=trainable)
-    
-    def forward(self, z_t_1):
-        _g_t = self.act(self.lin1(z_t_1))
-        g_t = self.act_weight(self.lin2(_g_t))
-        _h_t = self.act(self.lin3(z_t_1))
-        h_t = self.act(self.lin4(_h_t))
-        mu = (1 - g_t) * self.lin_n(z_t_1) + g_t * h_t
-
-        _var = self.lin_v(h_t)
-        if self.clip:
-            _var = torch.clamp(_var, min=-100, max=85)
-        var = self.act_var(_var)
-        return mu, var
-
-
 def expand(batch_size, num_nodes, T, edge_index, edge_attr, sample_rate=None):
     # edge_attr = edge_attr.repeat(T, 1)
     num_edges = int(edge_index.shape[1] / batch_size)
@@ -935,31 +768,6 @@ def expand(batch_size, num_nodes, T, edge_index, edge_attr, sample_rate=None):
 
     selected_edges = selected_edges.long()
     return selected_edges, selected_attrs
-
-
-def reverse_sequence(x, seq_lengths):
-    """
-    Brought from
-    https://github.com/pyro-ppl/pyro/blob/dev/examples/dmm/polyphonic_data_loader.py
-
-    Parameters
-    ----------
-    x: tensor (b, v, c, T_max)
-    seq_lengths: tensor (b, )
-
-    Returns
-    -------
-    x_reverse: tensor (b, v, c, T_max)
-        The input x in reversed order w.r.t. time-axis
-    """
-    x_reverse = torch.zeros_like(x)
-    for b in range(x.size(0)):
-        t = seq_lengths[b]
-        time_slice = torch.arange(t - 1, -1, -1, device=x.device)
-        reverse_seq = torch.index_select(x[b, :, :, :], -1, time_slice)
-        x_reverse[b, :, :, 0:t] = reverse_seq
-
-    return x_reverse
 
 
 def repeat(src, length):

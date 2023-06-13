@@ -36,7 +36,13 @@ class HeartGraphDataset(Dataset):
         dataset = matFiles['params']
         label = matFiles['label']
 
+        if len(dataset.shape) == 2:
+            dataset = np.expand_dims(dataset, axis=-1)
+            label = np.expand_dims(label, axis=0)
+
         dataset = dataset.transpose(2, 0, 1)
+        if seq_len is not None:
+            dataset = dataset[:, :, :seq_len]
 
         N = dataset.shape[0]
         if subset == 1:
@@ -51,7 +57,13 @@ class HeartGraphDataset(Dataset):
             dataset = dataset[sub_index, :, :]
             index = np.arange(dataset.shape[1])
         
-        label = label.astype(int)
+        if label.shape[1] == 2:
+            label = label.astype(int)
+        else:
+            label = label.astype(float)
+            label[:, 0] = label[:, 0].astype(int)
+            label[:, 1] = label[:, 1].astype(int)
+        
         self.label = torch.from_numpy(label[index])
         self.data = torch.from_numpy(dataset[index, :, :]).float()
         # self.corMfree = corMfree

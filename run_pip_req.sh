@@ -1,11 +1,8 @@
 #!/bin/bash
 
-CUDA=cu102
+CUDA=cu116
+
+pip install -U torch --extra-index-url https://download.pytorch.org/whl/${CUDA}
+pip install -U torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.12.1+${CUDA}.html
 
 pip install -r requirements.txt
-
-pip install torch-scatter -f https://pytorch-geometric.com/whl/torch-1.9.0+${CUDA}.html
-pip install torch-sparse -f https://pytorch-geometric.com/whl/torch-1.9.0+${CUDA}.html
-pip install torch-cluster -f https://pytorch-geometric.com/whl/torch-1.9.0+${CUDA}.html
-pip install torch-spline-conv -f https://pytorch-geometric.com/whl/torch-1.9.0+${CUDA}.html
-pip install torch-geometric
